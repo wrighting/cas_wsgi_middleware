@@ -2,7 +2,7 @@ import os
 import logging
 from werkzeug.wrappers import Request, Response
 from werkzeug.wsgi import SharedDataMiddleware
-from beaker.middleware import SessionMiddleware
+from werkzeug.contrib.sessions import FilesystemSessionStore
 
 import config
 from cas import CASMiddleware
@@ -35,8 +35,8 @@ def create_app(with_static=True):
         })
 
         if config.CAS_SERVICE != '':
-          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/')
-          app.wsgi_app = SessionMiddleware(app.wsgi_app, config.session_opts)
+          fs_session_store = FilesystemSessionStore()
+          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/', session_store = fs_session_store)
     return app
 
 if __name__ == '__main__':

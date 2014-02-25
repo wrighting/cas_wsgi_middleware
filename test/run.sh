@@ -16,7 +16,6 @@ fi
 cd ${VIRTUALENV}
 source bin/activate
 cp -pr ../../../src/* .
-cp ../../wsgi_static.py .
 cp ../../config.py .
 cp ../../test.py .
 cp -pr ../../static .
