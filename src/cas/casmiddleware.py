@@ -7,6 +7,7 @@ import requests
 import xml.dom.minidom
 from werkzeug.formparser import parse_form_data
 from werkzeug.wrappers import Request,Response
+import re
 
 __all__ = ['CASMiddleware']
 
@@ -20,36 +21,6 @@ CAS_ORIGIN = 'cas.origin'
 
 CAS_COOKIE_NAME = 'cas.cookie'
 
-def get_original_url(environ):
-    url = environ['wsgi.url_scheme'] + '://'
-
-    if environ.get('HTTP_HOST'):
-        url += environ['HTTP_HOST']
-    else:
-        url += environ['SERVER_NAME']
-
-        if environ['wsgi.url_scheme'] == 'https':
-            if environ['SERVER_PORT'] != '443':
-                url += ':' + environ['SERVER_PORT']
-        else:
-            if environ['SERVER_PORT'] != '80':
-                url += ':' + environ['SERVER_PORT']
-
-    url += quote(environ.get('SCRIPT_NAME',''))
-    url += quote(environ.get('PATH_INFO',''))
-
-    if environ.get('QUERY_STRING'):
-        params = parse_qs(environ['QUERY_STRING'])
-        
-        for k in ('ticket',): 
-            if k in params: 
-              del params[k]
-        if params:
-            url += '?' + urlencode(params, doseq=True)
-
-    return url
-
-
 class CASMiddleware(object):
 
     casNamespaceUri = 'http://www.yale.edu/tp/cas'
@@ -57,7 +28,7 @@ class CASMiddleware(object):
     samlNamespaceUri = 'urn:oasis:names:tc:SAML:2.0:assertion'
 
 
-    def __init__(self, application, cas_root_url, entry_page = '/', logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None):
+    def __init__(self, application, cas_root_url, entry_page = '/', logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None, ignore_redirect = None, ignored_callback = None):
         self._application = application
         self._root_url = cas_root_url
         self._login_url = cas_root_url + '/login'
@@ -70,16 +41,20 @@ class CASMiddleware(object):
         self._session_store = session_store
         self._session = None
         self._cookie_expires = False
+        if ignore_redirect is not None:
+          self._ignore_redirect = re.compile(ignore_redirect)
+          self._ignored_callback = ignored_callback
+        else:
+          self._ignore_redirect = None
 
 
-    def _validate(self, environ, ticket):
+    def _validate(self, service_url, ticket):
         
         if self._protocol == 2:
           validate_url = self._root_url + '/serviceValidate'
         elif self._protocol == 3:
           validate_url = self._root_url + '/p3/serviceValidate'
 
-        service_url = get_original_url(environ)
         r = requests.get(validate_url, params = {'service': service_url, 'ticket': ticket})
         result = r.text
         logging.debug(result)
@@ -170,16 +145,19 @@ class CASMiddleware(object):
               return response(environ, start_response)
             return self._application(environ, start_response)
         else:
-            query_string = environ.get('QUERY_STRING', '')
-            params = parse_qs(query_string)
+            params = request.args
             logging.debug('Session not authenticated' + str(self._session))
             if params.has_key('ticket'):
                 # Have ticket, validate with CAS server
-                ticket = params['ticket'][0]
+                ticket = params['ticket']
 
-                service_url = get_original_url(environ)
+                service_url = request.url
 
-                username = self._validate(environ, ticket)
+                service_url = re.sub(r".ticket=" + ticket, "", service_url)
+                logging.debug('Service URL' + service_url)
+                logging.debug(str(request))
+
+                username = self._validate(service_url, ticket)
 
                 if username is not None:
                     # Validation succeeded, redirect back to app
@@ -200,8 +178,12 @@ class CASMiddleware(object):
                   logging.debug('Single sign out request received')
                   response.status = '200 OK'
                   return response(environ, start_response)
+                if self._ignore_redirect is not None:
+                  if self._ignore_redirect.match(request.url):
+                    if self._ignored_callback is not None:
+                      return self._ignored_callback(environ, start_response)
                 logging.debug('Does not have ticket redirecting')
-                service_url = get_original_url(environ)
+                service_url = request.url
                 response.status = '302 Moved Temporarily'
                 response.headers['Location'] = '%s?service=%s' % (self._login_url, quote(service_url))
                 response.set_cookie(CAS_COOKIE_NAME, value = self._session.sid, max_age = None, expires = None)
