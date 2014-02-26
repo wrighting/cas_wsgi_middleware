@@ -7,7 +7,18 @@ from werkzeug.contrib.sessions import FilesystemSessionStore
 import config
 from cas import CASMiddleware
 
-class Shortly(object):
+#This function is called if:
+# Not authenticated
+# the ignore_redirect regex matches the (full) url pattern
+def ignored_callback(environ, start_response):
+    response = Response('{"Error":"NotAuthenticated"}')
+#    response.status = '401 Unauthorized'
+    response.status = '200 OK'
+    response.headers['Content-Type'] = 'application/json'
+
+    return response(environ, start_response)
+
+class MyApp(object):
 
 #Nothing to do
 #    def __init__(self, config):
@@ -27,7 +38,7 @@ class Shortly(object):
 
 
 def create_app(with_static=True):
-    app = Shortly()
+    app = MyApp()
     
     if with_static:
         app.wsgi_app = SharedDataMiddleware(app.wsgi_app, {
@@ -36,7 +47,7 @@ def create_app(with_static=True):
 
         if config.CAS_SERVICE != '':
           fs_session_store = FilesystemSessionStore()
-          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/', session_store = fs_session_store)
+          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/', session_store = fs_session_store, ignore_redirect = '(.*)\?datatype=', ignored_callback = ignored_callback)
     return app
 
 if __name__ == '__main__':
