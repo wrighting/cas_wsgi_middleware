@@ -11,6 +11,7 @@ import re
 
 __all__ = ['CASMiddleware']
 
+logger = logging.getLogger(__name__)
 
 # Session keys
 CAS_USERNAME = 'cas.username'
@@ -57,7 +58,7 @@ class CASMiddleware(object):
 
         r = requests.get(validate_url, params = {'service': service_url, 'ticket': ticket})
         result = r.text
-        logging.debug(result)
+        logger.debug(result)
         dom = xml.dom.minidom.parseString(result)
         username = None
         nodes = dom.getElementsByTagNameNS(self.casNamespaceUri, 'authenticationSuccess')
@@ -96,17 +97,17 @@ class CASMiddleware(object):
       sessions = self._session_store.list()
       for sid in sessions:
         session = self._session_store.get(sid)
-        logging.debug("Checking session:" + str(session))
+        logger.debug("Checking session:" + str(session))
         if CAS_TOKEN in session and session[CAS_TOKEN] == ticket_id:
-          logging.info("Removed session for ticket:" + ticket_id)
+          logger.info("Removed session for ticket:" + ticket_id)
           self._session_store.delete(session)
 
     def _is_single_sign_out(self, environ):
-      logging.debug("Testing for SLO")
+      logger.debug("Testing for SLO")
       if environ['REQUEST_METHOD'] == 'POST':
         current_url = environ.get('PATH_INFO','')
         origin = self._entry_page
-        logging.debug("Testing for SLO:" + current_url + " vs " + origin)
+        logger.debug("Testing for SLO:" + current_url + " vs " + origin)
         if current_url == origin:
           try:
             form = parse_form_data(environ)[1]
@@ -118,17 +119,17 @@ class CASMiddleware(object):
               sessionNode = nodes[0]
               if sessionNode.firstChild is not None:
                 sessionId = sessionNode.firstChild.nodeValue
-                logging.info("Received SLO request for:" + sessionId)
+                logger.info("Received SLO request for:" + sessionId)
                 self._remove_session_by_ticket(sessionId)
                 return True
           except (Exception):
-            logging.warning("Exception parsing post")
-            logging.exception("Exception parsing post:" + request_body)
+            logger.warning("Exception parsing post")
+            logger.exception("Exception parsing post:" + request_body)
       return False
 
     def _is_logout(self, environ):
       path = environ.get('PATH_INFO','')
-      logging.debug("Logout check:" + str(path) + " vs " + str(self._logout_url))
+      logger.debug("Logout check:" + str(path) + " vs " + str(self._logout_url))
       if self._logout_url != '' and self._logout_url == path:
         return True
       return False
@@ -146,7 +147,7 @@ class CASMiddleware(object):
             return self._application(environ, start_response)
         else:
             params = request.args
-            logging.debug('Session not authenticated' + str(self._session))
+            logger.debug('Session not authenticated' + str(self._session))
             if params.has_key('ticket'):
                 # Have ticket, validate with CAS server
                 ticket = params['ticket']
@@ -154,14 +155,14 @@ class CASMiddleware(object):
                 service_url = request.url
 
                 service_url = re.sub(r".ticket=" + ticket, "", service_url)
-                logging.debug('Service URL' + service_url)
-                logging.debug(str(request))
+                logger.debug('Service URL' + service_url)
+                logger.debug(str(request))
 
                 username = self._validate(service_url, ticket)
 
                 if username is not None:
                     # Validation succeeded, redirect back to app
-                    logging.debug('Validated ' + username)
+                    logger.debug('Validated ' + username)
                     self._set_session_var(CAS_ORIGIN, service_url)
                     self._set_session_var(CAS_TOKEN, ticket)
                     self._save_session()
@@ -175,14 +176,14 @@ class CASMiddleware(object):
             else:
                 #Check for single sign out
                 if (self._is_single_sign_out(environ)):
-                  logging.debug('Single sign out request received')
+                  logger.debug('Single sign out request received')
                   response.status = '200 OK'
                   return response(environ, start_response)
                 if self._ignore_redirect is not None:
                   if self._ignore_redirect.match(request.url):
                     if self._ignored_callback is not None:
                       return self._ignored_callback(environ, start_response)
-                logging.debug('Does not have ticket redirecting')
+                logger.debug('Does not have ticket redirecting')
                 service_url = request.url
                 response.status = '302 Moved Temporarily'
                 response.headers['Location'] = '%s?service=%s' % (self._login_url, quote(service_url))
@@ -206,14 +207,14 @@ class CASMiddleware(object):
 
     def _set_session_var(self, name, value):
         self._session[name] = value
-        logging.debug("Setting session:" + name + " to " + value)
+        logger.debug("Setting session:" + name + " to " + value)
 
     def _get_session_var(self, name):
         return (self._session[name])
 
     def _save_session(self):
         if self._session.should_save:
-          logging.debug("Saving session:" + str(self._session))
+          logger.debug("Saving session:" + str(self._session))
           self._session_store.save(self._session)
     
     def _do_session_logout(self):
@@ -227,11 +228,11 @@ class CASMiddleware(object):
         dest = self._logout_dest
         if dest == '' and self._has_session_var(CAS_ORIGIN):
           dest = self._get_session_var(CAS_ORIGIN)
-        logging.debug("Log out dest:" + dest)
+        logger.debug("Log out dest:" + dest)
         parsed = urlparse(dest)
         if parsed.path == self._logout_url:
           dest = self._sso_logout_url
-        logging.debug("Log out redirecting to:" + dest)
+        logger.debug("Log out redirecting to:" + dest)
         response.status = '302 Moved Temporarily'
         response.headers['Location'] = '%s?service=%s' % (self._sso_logout_url, quote(dest))
         return response
@@ -239,7 +240,7 @@ class CASMiddleware(object):
     #Communicate values to the rest of the application
     def _set_values(self, environ):
         username = self._get_session_var(CAS_USERNAME)
-        logging.debug('Session authenticated for ' + username)
+        logger.debug('Session authenticated for ' + username)
         environ['AUTH_TYPE'] = 'CAS'
         environ['REMOTE_USER'] = str(username)
 
