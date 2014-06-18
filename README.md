@@ -80,5 +80,14 @@ Sometimes when you are not authenticated you don't want to redirect to CAS, this
 
 A function defining what to do when the ignore_redirect regex matches
 
+###gateway_redirect
 
+Default = None, A regular expression for pages that use a CAS gateway i.e. test if logged in but never show the log in page
 
+###group_separator
+
+Default = ';', How to separate the groups returned from CAS as part of attribute release
+
+###group_environ
+
+Default = 'HTTP_CAS_MEMBEROF', The name of the environ variable containing the groups

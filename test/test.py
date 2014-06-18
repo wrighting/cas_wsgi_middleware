@@ -24,8 +24,12 @@ class MyApp(object):
 #    def __init__(self, config):
 
     def dispatch_request(self, request, environ):
-        data ='Hello ' + environ['REMOTE_USER'] + '!'
-        data += '<a href="/logout">Logout</a>'
+        user = environ.get('REMOTE_USER', 'guest')
+        data ='Hello ' + user + '!'
+        if 'REMOTE_USER' in environ:
+          data += '<a href="/logout">Logout</a>'
+        if 'HTTP_CAS_MEMBEROF' in environ:
+          data += environ['HTTP_CAS_MEMBEROF']
         return Response(data, headers = { ('Content-type', 'text/html')})
 
     def wsgi_app(self, environ, start_response):
@@ -47,7 +51,7 @@ def create_app(with_static=True):
 
         if config.CAS_SERVICE != '':
           fs_session_store = FilesystemSessionStore()
-          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/', session_store = fs_session_store, ignore_redirect = '(.*)\?datatype=', ignored_callback = ignored_callback)
+          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/', session_store = fs_session_store, ignore_redirect = '(.*)\?datatype=', ignored_callback = ignored_callback, gateway_redirect = '(.*)/static/gateway(.*)')
     return app
 
 if __name__ == '__main__':
