@@ -64,7 +64,7 @@ class CASMiddleware(object):
           validate_url = self._root_url + '/p3/serviceValidate'
 
         r = requests.get(validate_url, params = {'service': service_url, 'ticket': ticket})
-        result = r.text
+        result = r.text.encode('utf8')
         logger.debug(result)
         dom = xml.dom.minidom.parseString(result)
         username = None
