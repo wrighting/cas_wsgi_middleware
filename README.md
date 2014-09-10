@@ -44,6 +44,10 @@ This is url of your CAS server - typically https://yourdomain.com/cas
 
 /login, /logout etc are appended to this url
 
+###effective_url
+
+If the application is behind a proxy server then, if the context is different frm the application server, then this parameter should be set as the proxy server context 
+
 ###logout_url
 
 This url will be intercepted by the middleware to log you out of the application, and CAS
