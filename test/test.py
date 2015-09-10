@@ -3,6 +3,7 @@ import logging
 from werkzeug.wrappers import Request, Response
 from werkzeug.wsgi import SharedDataMiddleware
 from werkzeug.contrib.sessions import FilesystemSessionStore
+from pprint import pformat
 
 import config
 from cas import CASMiddleware
@@ -30,6 +31,11 @@ class MyApp(object):
           data += '<a href="/logout">Logout</a>'
         if 'HTTP_CAS_MEMBEROF' in environ:
           data += environ['HTTP_CAS_MEMBEROF']
+        for keys,values in environ.items():
+          print(keys)
+          print(values)
+        data += '%s<br/>' % pformat(environ)
+        data += '%s<br/>' % pformat(request)
         return Response(data, headers = { ('Content-type', 'text/html')})
 
     def wsgi_app(self, environ, start_response):

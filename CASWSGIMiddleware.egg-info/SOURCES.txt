@@ -1,0 +1,11 @@
+MANIFEST.in
+README.md
+setup.py
+CASWSGIMiddleware.egg-info/PKG-INFO
+CASWSGIMiddleware.egg-info/SOURCES.txt
+CASWSGIMiddleware.egg-info/dependency_links.txt
+CASWSGIMiddleware.egg-info/requires.txt
+CASWSGIMiddleware.egg-info/top_level.txt
+cas/__init__.py
+cas/casmiddleware.py
+test/test.py
