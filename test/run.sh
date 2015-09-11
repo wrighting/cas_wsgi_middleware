@@ -17,7 +17,7 @@ cd ${VIRTUALENV}
 source bin/activate
 cp -pr ../../../cas .
 cp -pr ../../../REQUIREMENTS .
-cp ../../config.py .
+cp ../../test.cfg .
 cp ../../test.py .
 cp -pr ../../static .
 if [ ${SETUP} = true ]

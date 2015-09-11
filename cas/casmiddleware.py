@@ -8,6 +8,7 @@ import xml.dom.minidom
 from werkzeug.formparser import parse_form_data
 from werkzeug.wrappers import Request,Response
 import re
+from ConfigParser import ConfigParser
 
 __all__ = ['CASMiddleware']
 
@@ -56,6 +57,16 @@ class CASMiddleware(object):
         self._group_separator = group_separator
         self._group_environ = group_environ
 
+
+    @classmethod
+    def fromConfig(self, application, fs_session_store, ignored_callback = None, filename = None):
+        if filename == None:
+            filename = 'cas.cfg'
+
+        config = ConfigParser(allow_no_value = True)
+        config.read(filename)
+
+        return(self(application, cas_root_url = config.get('CAS','CAS_SERVICE'), logout_url = config.get('CAS','CAS_LOGOUT_PAGE'), logout_dest = config.get('CAS','CAS_LOGOUT_DESTINATION'), protocol_version = config.getint('CAS','CAS_VERSION'), casfailed_url = config.get('CAS','CAS_FAILURE_PAGE'), entry_page = config.get('CAS','ENTRY_PAGE'), session_store = fs_session_store, ignore_redirect = config.get('CAS','IGNORE_REDIRECT'), ignored_callback = ignored_callback, gateway_redirect = config.get('CAS','GATEWAY_REDIRECT')))
 
     def _validate(self, service_url, ticket):
         

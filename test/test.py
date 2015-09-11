@@ -5,7 +5,8 @@ from werkzeug.wsgi import SharedDataMiddleware
 from werkzeug.contrib.sessions import FilesystemSessionStore
 from pprint import pformat
 
-import config
+from ConfigParser import ConfigParser
+
 from cas import CASMiddleware
 
 #This function is called if:
@@ -55,15 +56,17 @@ def create_app(with_static=True):
             '/static':  os.path.join(os.path.dirname(__file__), 'static')
         })
 
-        if config.CAS_SERVICE != '':
-          fs_session_store = FilesystemSessionStore()
-          app.wsgi_app = CASMiddleware(app.wsgi_app, cas_root_url = config.CAS_SERVICE, logout_url = config.CAS_LOGOUT_PAGE, logout_dest = config.CAS_LOGOUT_DESTINATION, protocol_version = config.CAS_VERSION, casfailed_url = config.CAS_FAILURE_PAGE, entry_page = '/', session_store = fs_session_store, ignore_redirect = '(.*)\?datatype=', ignored_callback = ignored_callback, gateway_redirect = '(.*)/static/gateway(.*)')
+        fs_session_store = FilesystemSessionStore()
+        app.wsgi_app = CASMiddleware.fromConfig(app.wsgi_app, fs_session_store, ignored_callback = ignored_callback, filename = 'test.cfg')
     return app
 
 if __name__ == '__main__':
     from werkzeug.serving import run_simple
     logging.basicConfig(level=logging.DEBUG)
+    config = ConfigParser(allow_no_value = True)
+    config.read('test.cfg')
     app = create_app()
-    run_simple(config.HOSTNAME, config.PORT, app, use_debugger=True, use_reloader=True)
+
+    run_simple(config.get('Test','HOSTNAME'), config.getint('Test','PORT'), app, use_debugger=True, use_reloader=True)
 
 
