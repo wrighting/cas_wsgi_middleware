@@ -15,7 +15,8 @@ then
 fi
 cd ${VIRTUALENV}
 source bin/activate
-cp -pr ../../../src/* .
+cp -pr ../../../cas .
+cp -pr ../../../REQUIREMENTS .
 cp ../../config.py .
 cp ../../test.py .
 cp -pr ../../static .
