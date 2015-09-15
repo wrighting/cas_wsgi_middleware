@@ -9,6 +9,7 @@ from werkzeug.formparser import parse_form_data
 from werkzeug.wrappers import Request,Response
 import re
 from ConfigParser import ConfigParser
+import rsa
 
 __all__ = ['CASMiddleware']
 
@@ -24,6 +25,8 @@ CAS_ORIGIN = 'cas.origin'
 
 CAS_COOKIE_NAME = 'cas.cookie'
 
+CAS_PASSWORD = 'cas.ldap.password'
+
 class CASMiddleware(object):
 
     casNamespaceUri = 'http://www.yale.edu/tp/cas'
@@ -31,7 +34,7 @@ class CASMiddleware(object):
     samlNamespaceUri = 'urn:oasis:names:tc:SAML:2.0:assertion'
 
 
-    def __init__(self, application, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF'):
+    def __init__(self, application, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None):
         self._application = application
         self._root_url = cas_root_url
         self._login_url = cas_root_url + '/login'
@@ -56,6 +59,11 @@ class CASMiddleware(object):
           self._gateway_redirect = None
         self._group_separator = group_separator
         self._group_environ = group_environ
+        keydata = None
+        with open(cas_private_key) as privatefile:
+            keydata = privatefile.read()
+        self._cas_private_key = rsa.PrivateKey.load_pkcs1(keydata)
+
 
 
     @classmethod
@@ -66,7 +74,7 @@ class CASMiddleware(object):
         config = ConfigParser(allow_no_value = True)
         config.read(filename)
 
-        return(self(application, cas_root_url = config.get('CAS','CAS_SERVICE'), logout_url = config.get('CAS','CAS_LOGOUT_PAGE'), logout_dest = config.get('CAS','CAS_LOGOUT_DESTINATION'), protocol_version = config.getint('CAS','CAS_VERSION'), casfailed_url = config.get('CAS','CAS_FAILURE_PAGE'), entry_page = config.get('CAS','ENTRY_PAGE'), session_store = fs_session_store, ignore_redirect = config.get('CAS','IGNORE_REDIRECT'), ignored_callback = ignored_callback, gateway_redirect = config.get('CAS','GATEWAY_REDIRECT')))
+        return(self(application, cas_root_url = config.get('CAS','CAS_SERVICE'), logout_url = config.get('CAS','CAS_LOGOUT_PAGE'), logout_dest = config.get('CAS','CAS_LOGOUT_DESTINATION'), protocol_version = config.getint('CAS','CAS_VERSION'), casfailed_url = config.get('CAS','CAS_FAILURE_PAGE'), entry_page = config.get('CAS','ENTRY_PAGE'), session_store = fs_session_store, ignore_redirect = config.get('CAS','IGNORE_REDIRECT'), ignored_callback = ignored_callback, gateway_redirect = config.get('CAS','GATEWAY_REDIRECT'), cas_private_key = config.get('CAS', 'PRIVATE_KEY')))
 
     def _validate(self, service_url, ticket):
         
@@ -101,6 +109,17 @@ class CASMiddleware(object):
                 elif self._protocol == 3:
                 #So that the value is the same for version 2 or 3
                     self._set_session_var(CAS_GROUPS, '[' + self._group_separator.join(groupName) + ']')
+            nodes = successNode.getElementsByTagNameNS(self.casNamespaceUri, 'credential')
+            if nodes:
+                credNode = nodes[0]
+                if credNode.firstChild is not None:
+                    cred64 = credNode.firstChild.nodeValue
+                    if self._cas_private_key:
+                        credential = cred64.decode('base64')
+                        pw = rsa.decrypt(credential, self._cas_private_key)
+                        self._set_encrypted_session_var(CAS_PASSWORD, pw)
+                    else:
+                        logger.error('No private key set. Unable to decrypt password.')
         dom.unlink()
 
         return username
@@ -248,6 +267,19 @@ class CASMiddleware(object):
         self._session[name] = value
         logger.debug("Setting session:" + name + " to " + value)
 
+    def _set_encrypted_session_var(self, name, value):
+        if not hasattr(self,'_session_private_key'):
+            (self._session_public_key, self._session_private_key) = rsa.newkeys(512)
+        self._session[name] = rsa.encrypt(value.encode('utf8'),self._session_public_key)
+    
+    def _get_encrypted_session_var(self, name):
+        if not hasattr(self,'_session_private_key'):
+            return None
+        if name in self._session:
+          return (rsa.decrypt(self._session[name], self._session_private_key).decode('utf8'))
+        else:
+          return None
+    
     def _get_session_var(self, name):
         if name in self._session:
           return (self._session[name])
@@ -285,6 +317,7 @@ class CASMiddleware(object):
         logger.debug('Session authenticated for ' + username)
         environ['AUTH_TYPE'] = 'CAS'
         environ['REMOTE_USER'] = str(username)
+        environ['PASSWORD'] = str(self._get_encrypted_session_var(CAS_PASSWORD))
         environ[self._group_environ] = str(self._get_session_var(CAS_GROUPS))
 
     def _casfailed(self, environ, service_url, start_response):

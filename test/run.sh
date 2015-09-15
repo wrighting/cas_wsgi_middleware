@@ -18,6 +18,7 @@ source bin/activate
 cp -pr ../../../cas .
 cp -pr ../../../REQUIREMENTS .
 cp ../../test.cfg .
+cp ../../private_key.pem .
 cp ../../test.py .
 cp -pr ../../static .
 if [ ${SETUP} = true ]
