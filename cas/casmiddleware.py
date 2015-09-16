@@ -11,8 +11,6 @@ import re
 from ConfigParser import ConfigParser
 import rsa
 
-__all__ = ['CASMiddleware']
-
 logger = logging.getLogger(__name__)
 
 # Session keys
