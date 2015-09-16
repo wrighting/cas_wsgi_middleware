@@ -94,4 +94,8 @@ Default = ';', How to separate the groups returned from CAS as part of attribute
 
 ###group_environ
 
-Default = 'HTTP_CAS_MEMBEROF', The name of the environ variable containing the groups
+Default = 'HTTP_CAS_MEMBEROF', The name of the environment variable containing the groups
+
+###cas_private_key (CAS 4.1)
+
+Default = None, The name of a file containing the private key used for decrypting the credentials attribute when using clearpass. This will be available in the PASSWORD environment variable. The value is held in the session using encryption keys held only in memory.

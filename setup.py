@@ -8,7 +8,7 @@ setup(
     name="CASWSGIMiddleware",
 
     # Version number (initial):
-    version="0.1.0",
+    version="1.0.0",
 
     # Application author details:
     author="Ian Wright",
@@ -22,13 +22,18 @@ setup(
     url="https://github.com/wrighting/cas_wsgi_middleware",
     #
     # license="LICENSE.txt",
-    description="Useful towel-related stuff.",
+    description="A WSGI middleware module to enable CAS authentication",
 
     long_description=open("README.md").read(),
 
     # Dependent packages (distributions)
     install_requires=[
-        "Werkzeug >= 0.9.4",
+        "rsa >= 3.2",
 	"requests >= 2.2.1"
     ],
+
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+        'Programming Language :: Python :: 2'
+    ]
 )

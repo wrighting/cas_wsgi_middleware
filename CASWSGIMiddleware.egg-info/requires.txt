@@ -1,2 +1,0 @@
-Werkzeug >= 0.9.4
-requests >= 2.2.1
