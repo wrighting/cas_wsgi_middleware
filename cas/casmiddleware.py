@@ -1,38 +1,43 @@
 import logging
-import time
 from cgi import parse_qs
 from urllib import quote, urlencode, unquote_plus
 from urlparse import urlparse
 import requests
 import xml.dom.minidom
-from werkzeug.formparser import parse_form_data
-from werkzeug.wrappers import Request,Response
 import re
 from ConfigParser import ConfigParser
 import rsa
+from abc import ABCMeta, abstractmethod
 
 logger = logging.getLogger(__name__)
 
-# Session keys
-CAS_USERNAME = 'cas.username'
-CAS_GROUPS = 'cas.groups'
-CAS_TOKEN = 'cas.token'
-CAS_GATEWAY = 'cas.gateway'
-
-CAS_ORIGIN = 'cas.origin'
-
-CAS_COOKIE_NAME = 'cas.cookie'
-
-CAS_PASSWORD = 'cas.ldap.password'
 
 class CASMiddleware(object):
+
+    __metaclass__ = ABCMeta
 
     casNamespaceUri = 'http://www.yale.edu/tp/cas'
     samlpNamespaceUri = 'urn:oasis:names:tc:SAML:2.0:protocol'
     samlNamespaceUri = 'urn:oasis:names:tc:SAML:2.0:assertion'
 
+    # Session keys
+    CAS_USERNAME = 'cas.username'
+    CAS_GROUPS = 'cas.groups'
+    CAS_TOKEN = 'cas.token'
+    CAS_GATEWAY = 'cas.gateway'
 
-    def __init__(self, application, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None):
+    CAS_ORIGIN = 'cas.origin'
+
+    CAS_COOKIE_NAME = 'cas.cookie'
+
+    CAS_PASSWORD = 'cas.ldap.password'
+
+    _root_url = None
+
+    def __init__(self):
+        logging.debug("Initializing middleware")
+
+    def initialize(self, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None, application = None):
         self._application = application
         self._root_url = cas_root_url
         self._login_url = cas_root_url + '/login'
@@ -58,21 +63,27 @@ class CASMiddleware(object):
         self._group_separator = group_separator
         self._group_environ = group_environ
         keydata = None
-        with open(cas_private_key) as privatefile:
-            keydata = privatefile.read()
-        self._cas_private_key = rsa.PrivateKey.load_pkcs1(keydata)
+        if cas_private_key and cas_private_key != '':
+            with open(cas_private_key) as privatefile:
+                keydata = privatefile.read()
+            self._cas_private_key = rsa.PrivateKey.load_pkcs1(keydata)
 
-
-
-    @classmethod
-    def fromConfig(self, application, fs_session_store, ignored_callback = None, filename = None):
+    def loadSettings(self, filename = None, ignored_callback = None):
         if filename == None:
             filename = 'cas.cfg'
-
         config = ConfigParser(allow_no_value = True)
         config.read(filename)
+        self.initialize(cas_root_url = config.get('CAS','CAS_SERVICE'), logout_url = config.get('CAS','CAS_LOGOUT_PAGE'), logout_dest = config.get('CAS','CAS_LOGOUT_DESTINATION'), protocol_version = config.getint('CAS','CAS_VERSION'), casfailed_url = config.get('CAS','CAS_FAILURE_PAGE'), entry_page = config.get('CAS','ENTRY_PAGE'), ignore_redirect = config.get('CAS','IGNORE_REDIRECT'), ignored_callback = ignored_callback, gateway_redirect = config.get('CAS','GATEWAY_REDIRECT'), cas_private_key = config.get('CAS', 'PRIVATE_KEY'))
 
-        return(self(application, cas_root_url = config.get('CAS','CAS_SERVICE'), logout_url = config.get('CAS','CAS_LOGOUT_PAGE'), logout_dest = config.get('CAS','CAS_LOGOUT_DESTINATION'), protocol_version = config.getint('CAS','CAS_VERSION'), casfailed_url = config.get('CAS','CAS_FAILURE_PAGE'), entry_page = config.get('CAS','ENTRY_PAGE'), session_store = fs_session_store, ignore_redirect = config.get('CAS','IGNORE_REDIRECT'), ignored_callback = ignored_callback, gateway_redirect = config.get('CAS','GATEWAY_REDIRECT'), cas_private_key = config.get('CAS', 'PRIVATE_KEY')))
+    @classmethod
+    def fromConfig(self, application, fs_session_store = None, ignored_callback = None, filename = None):
+
+        instance = self()
+        instance.loadSettings(filename, ignored_callback)
+        instance._application = application
+        instance._ignored_callback = ignored_callback
+
+        return (instance)
 
     def _validate(self, service_url, ticket):
         
@@ -94,7 +105,7 @@ class CASMiddleware(object):
                 userNode = nodes[0]
                 if userNode.firstChild is not None:
                     username = userNode.firstChild.nodeValue
-                    self._set_session_var(CAS_USERNAME, username)
+                    self._set_session_var(self.CAS_USERNAME, username)
             nodes = successNode.getElementsByTagNameNS(self.casNamespaceUri, 'memberOf')
             if nodes:
                 groupName = []
@@ -103,10 +114,10 @@ class CASMiddleware(object):
                     groupName.append(groupNode.firstChild.nodeValue)
                 if self._protocol == 2:
                 #Common but non standard extension - only one value - concatenated on the server
-                    self._set_session_var(CAS_GROUPS, groupName[0])
+                    self._set_session_var(self.CAS_GROUPS, groupName[0])
                 elif self._protocol == 3:
                 #So that the value is the same for version 2 or 3
-                    self._set_session_var(CAS_GROUPS, '[' + self._group_separator.join(groupName) + ']')
+                    self._set_session_var(self.CAS_GROUPS, '[' + self._group_separator.join(groupName) + ']')
             nodes = successNode.getElementsByTagNameNS(self.casNamespaceUri, 'credential')
             if nodes:
                 credNode = nodes[0]
@@ -115,42 +126,29 @@ class CASMiddleware(object):
                     if self._cas_private_key:
                         credential = cred64.decode('base64')
                         pw = rsa.decrypt(credential, self._cas_private_key)
-                        self._set_encrypted_session_var(CAS_PASSWORD, pw)
+                        self._set_encrypted_session_var(self.CAS_PASSWORD, pw)
                     else:
                         logger.error('No private key set. Unable to decrypt password.')
         dom.unlink()
 
         return username
 
-    def _is_session_expired(self, request):
+    @abstractmethod
+    def _is_session_expired(self):
 #        
 #          self._session_store.delete(self._session)
 #          self._get_session(request)
 #          return True
         return False
 
+    @abstractmethod
     def _remove_session_by_ticket(self, ticket_id):
-      sessions = self._session_store.list()
-      for sid in sessions:
-        session = self._session_store.get(sid)
-        logger.debug("Checking session:" + str(session))
-        if CAS_TOKEN in session and session[CAS_TOKEN] == ticket_id:
-          logger.info("Removed session for ticket:" + ticket_id)
-          self._session_store.delete(session)
+      logger.debug("Removing session id:" + str(ticket_id))
 
-    def _is_single_sign_out(self, environ):
-      logger.debug("Testing for SLO")
-      if environ['REQUEST_METHOD'] == 'POST':
-        current_url = environ.get('PATH_INFO','')
-        origin = self._entry_page
-        logger.debug("Testing for SLO:" + current_url + " vs " + origin)
-        if current_url == origin:
-          try:
-            form = parse_form_data(environ)[1]
-            request_body = form['logoutRequest']
-            request_body = unquote_plus(request_body).decode('utf8') 
-            logger.debug("POST:" + str(request_body))
-            logger.debug("POST:" + str(environ))
+    def _parse_logout_request(self, request_body):
+        isLogout = False
+        request_body = unquote_plus(request_body).decode('utf8') 
+        try:
             dom = xml.dom.minidom.parseString(request_body)
             nodes = dom.getElementsByTagNameNS(self.samlpNamespaceUri, 'SessionIndex')
             if nodes:
@@ -159,108 +157,121 @@ class CASMiddleware(object):
                 sessionId = sessionNode.firstChild.nodeValue
                 logger.info("Received SLO request for:" + sessionId)
                 self._remove_session_by_ticket(sessionId)
-                return True
+                isLogout = True
+        except (Exception):
+            logger.warning("Exception parsing post")
+            logger.exception("Exception parsing post:" + request_body)
+        return(isLogout)
+
+    def _is_single_sign_out(self, request_method, current_url, form):
+      logger.debug("Testing for SLO")
+      if request_method == 'POST':
+        if current_url == self._entry_page:
+          try:
+            request_body = form['logoutRequest']
+            logger.debug("POST:" + str(request_body))
+            logger.debug("POST:" + str(environ))
+            return self._parse_logout_request(request_body)
           except (Exception):
             logger.warning("Exception parsing post")
             logger.exception("Exception parsing post:" + request_body)
       return False
 
-    def _is_logout(self, environ):
-      path = environ.get('PATH_INFO','')
+    def _is_logout(self, path):
       logger.debug("Logout check:" + str(path) + " vs " + str(self._logout_url))
       if self._logout_url != '' and self._logout_url == path:
         return True
       return False
 
-    def __call__(self, environ, start_response):
-        request = Request(environ)
-        response = Response('')
-        self._get_session(request)
-        if self._has_session_var(CAS_USERNAME) and not self._is_session_expired(request):
-            self._set_values(environ)
-            if self._is_logout(environ):
+
+    def _process_request(self, request_method, request_url, path, params, form):
+        response = { 'status': '', 'headers': {} }
+
+        if self._has_session_var(self.CAS_USERNAME) and not self._is_session_expired():
+            if self._is_logout(path):
               self._do_session_logout()
               response = self._get_logout_redirect_url()
-              return response(environ, start_response)
-            return self._application(environ, start_response)
+              response['logout'] = True
+              return response
+            response['set_values'] = True
+            return response
         else:
-            params = request.args
             logger.debug('Session not authenticated' + str(self._session))
             if params.has_key('ticket'):
                 # Have ticket, validate with CAS server
                 ticket = params['ticket']
 
-                service_url = self._effective_url or request.url
+                service_url = self._effective_url or request_url
 
                 service_url = re.sub(r".ticket=" + ticket, "", service_url)
                 logger.debug('Service URL' + service_url)
-                logger.debug(str(request))
 
                 username = self._validate(service_url, ticket)
 
                 if username is not None:
                     # Validation succeeded, redirect back to app
                     logger.debug('Validated ' + username)
-                    self._set_session_var(CAS_ORIGIN, service_url)
-                    self._set_session_var(CAS_TOKEN, ticket)
+                    self._set_session_var(self.CAS_ORIGIN, service_url)
+                    self._set_session_var(self.CAS_TOKEN, ticket)
                     self._save_session()
-                    response.status = '302 Moved Temporarily'
-                    response.headers['Location'] = service_url
-                    return response(environ, start_response)
+                    response['status'] = '302 Moved Temporarily'
+                    response['headers']['Location'] = service_url
+                    return response
                 else:
                     # Validation failed (for whatever reason)
-                    response = self._casfailed(environ, service_url, start_response)
-                    return response(environ, start_response)
+                    response = self._casfailed(service_url)
+                    return response
             else:
                 #Check for single sign out
-                if (self._is_single_sign_out(environ)):
+                if (self._is_single_sign_out(request_method, path, form)):
                   logger.debug('Single sign out request received')
-                  response.status = '200 OK'
-                  return response(environ, start_response)
+                  response['logout'] = True
+                  response['status'] = '200 OK'
+                  return response
                 if self._ignore_redirect is not None:
-                  if self._ignore_redirect.match(request.url):
+                  if self._ignore_redirect.match(request_url):
                     if self._ignored_callback is not None:
-                      return self._ignored_callback(environ, start_response)
+                      response['ignore_callback'] = True
+                      return response
                 is_gateway = ''
                 if self._gateway_redirect is not None:
-                  logger.debug('Gateway matching:' + request.url)
-                  if self._gateway_redirect.match(request.url):
+                  logger.debug('Gateway matching:' + request_url)
+                  if self._gateway_redirect.match(request_url):
                     #See if we've been here before
-                    gw = self._get_session_var(CAS_GATEWAY)
+                    gw = self._get_session_var(self.CAS_GATEWAY)
                     if gw != None:
-                      logger.debug('Not logged in carrying on to:' + request.url)
-                      self._remove_session_var(CAS_GATEWAY)
+                      logger.debug('Not logged in carrying on to:' + request_url)
+                      self._remove_session_var(self.CAS_GATEWAY)
                       self._save_session()
                       #A bit paranoid but check it's the same URL
-                      if gw == request.url:
-                        return self._application(environ, start_response)
+                      if gw == request_url:
+                        return None
                     
-                    logger.debug('Checking if logged in to CAS:' + request.url)
+                    logger.debug('Checking if logged in to CAS:' + request_url)
                     is_gateway = '&gateway=true'
-                    self._set_session_var(CAS_GATEWAY, request.url)
+                    self._set_session_var(self.CAS_GATEWAY, request_url)
                     self._save_session()
                 logger.debug('Does not have ticket redirecting')
-                service_url = request.url
-                response.status = '302 Moved Temporarily'
-                response.headers['Location'] = '%s?service=%s%s' % (self._login_url, quote(service_url),is_gateway)
-                response.set_cookie(CAS_COOKIE_NAME, value = self._session.sid, max_age = None, expires = None)
-                return response(environ, start_response)
+                service_url = request_url
+                response['status'] = '302 Moved Temporarily'
+                response['headers']['Location'] = '%s?service=%s%s' % (self._login_url, quote(service_url),is_gateway)
+                response['cookie_value'] = self._get_session_var('sid')
+                return response
 
+    @abstractmethod
     def _get_session(self, request):
-        sid = request.cookies.get(CAS_COOKIE_NAME)
-        if sid is None:
-          self._session = self._session_store.new()
-          self._set_session_var('_created_time', str(time.time()))
-        else:
-          self._session = self._session_store.get(sid)
-        self._set_session_var('_accessed_time', str(time.time()))
+        logger.critical('Must define a method to get the current session')
 
+    @abstractmethod
     def _has_session_var(self, name):
         return name in self._session 
 
+    @abstractmethod
     def _remove_session_var(self, name):
-        del self._session[name] 
+        if name in self._session:
+            del self._session[name] 
 
+    @abstractmethod
     def _set_session_var(self, name, value):
         self._session[name] = value
         logger.debug("Setting session:" + name + " to " + value)
@@ -278,58 +289,66 @@ class CASMiddleware(object):
         else:
           return None
     
+    @abstractmethod
     def _get_session_var(self, name):
         if name in self._session:
           return (self._session[name])
         else:
           return None
 
+    @abstractmethod
     def _save_session(self):
-        if self._session.should_save:
-          logger.debug("Saving session:" + str(self._session))
-          self._session_store.save(self._session)
+        logger.critical('Must define a method to save the current session')
+
+    @abstractmethod
+    def _delete_session(self):
+        #Unless overriding _do_session_logout
+        logger.critical('Must define a method to delete the current session')
     
     def _do_session_logout(self):
-        self._remove_session_var(CAS_USERNAME)
-        self._remove_session_var(CAS_GROUPS)
+        self._remove_session_var(self.CAS_USERNAME)
+        self._remove_session_var(self.CAS_GROUPS)
+        self._remove_session_var(self.CAS_PASSWORD)
         self._save_session()
-        self._session_store.delete(self._session)
+        self._delete_session()
 
     def _get_logout_redirect_url(self):
-        response = Response('')
+        response = { 'headers': {} }
         dest = self._logout_dest
-        if dest == '' and self._has_session_var(CAS_ORIGIN):
-          dest = self._get_session_var(CAS_ORIGIN)
+        if dest == '' and self._has_session_var(self.CAS_ORIGIN):
+          dest = self._get_session_var(self.CAS_ORIGIN)
         logger.debug("Log out dest:" + dest)
         parsed = urlparse(dest)
         if parsed.path == self._logout_url:
           dest = self._sso_logout_url
         logger.debug("Log out redirecting to:" + dest)
-        response.status = '302 Moved Temporarily'
-        response.headers['Location'] = '%s?service=%s' % (self._sso_logout_url, quote(dest))
+        response['status'] = '302 Moved Temporarily'
+        response['headers']['Location'] = '%s?service=%s' % (self._sso_logout_url, quote(dest))
         return response
 
     #Communicate values to the rest of the application
+    @abstractmethod
     def _set_values(self, environ):
-        username = self._get_session_var(CAS_USERNAME)
+        logger.critical('Must define a method to communicate the CAS values to the application')
+        username = self._get_session_var(self.CAS_USERNAME)
         logger.debug('Session authenticated for ' + username)
-        environ['AUTH_TYPE'] = 'CAS'
-        environ['REMOTE_USER'] = str(username)
-        environ['PASSWORD'] = str(self._get_encrypted_session_var(CAS_PASSWORD))
-        environ[self._group_environ] = str(self._get_session_var(CAS_GROUPS))
+        #environ['AUTH_TYPE'] = 'CAS'
+        #environ['REMOTE_USER'] = str(username)
+        #environ['PASSWORD'] = str(self._get_encrypted_session_var(self.CAS_PASSWORD))
+        #environ[self._group_environ] = str(self._get_session_var(self.CAS_GROUPS))
 
-    def _casfailed(self, environ, service_url, start_response):
+    def _casfailed(self, service_url):
 
-        response = Response('')
+        response = { 'headers': {} }
         if self._casfailed_url is not None:
-            response.status = '302 Moved Temporarily'
-            response.headers['Location'] = self._casfailed_url
+            response['status'] = '302 Moved Temporarily'
+            response['headers']['Location'] = self._casfailed_url
         else:
             # Default failure notice
-            response.status = '401 Unauthorized'
-            response.headers['Location'] = self._casfailed_url
-            response.headers['Content-Type'] = 'text/plain'
-            response.headers['WWW-Authenticate'] = 'CAS casUrl="' + self._root_url + '" service="' + service_url + '"'
-            response.data = 'CAS authentication failed\n'
+            response['status'] = '401 Unauthorized'
+            response['headers']['Location'] = self._casfailed_url
+            response['headers']['Content-Type'] = 'text/plain'
+            response['headers']['WWW-Authenticate'] = 'CAS casUrl="' + self._root_url + '" service="' + service_url + '"'
+            response['data'] = 'CAS authentication failed\n'
         return response
 
