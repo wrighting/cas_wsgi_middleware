@@ -4,6 +4,7 @@ import time
 from django.http import HttpResponse
 from django.contrib.auth import logout
 from django.contrib import auth
+from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
 
