@@ -7,7 +7,7 @@ from pprint import pformat
 
 from ConfigParser import ConfigParser
 
-from cas import CASMiddleware
+from cas import WerkzeugCAS
 
 #This function is called if:
 # Not authenticated
@@ -57,7 +57,7 @@ def create_app(with_static=True):
         })
 
         fs_session_store = FilesystemSessionStore()
-        app.wsgi_app = CASMiddleware.fromConfig(app.wsgi_app, fs_session_store, ignored_callback = ignored_callback, filename = 'test.cfg')
+        app.wsgi_app = WerkzeugCAS.fromConfig(app.wsgi_app, fs_session_store, ignored_callback = ignored_callback, filename = 'test.cfg')
     return app
 
 if __name__ == '__main__':
