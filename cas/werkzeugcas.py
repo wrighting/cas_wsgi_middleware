@@ -1,12 +1,23 @@
 import logging
 from werkzeug.formparser import parse_form_data
 from werkzeug.wrappers import Request,Response
-from cas import CASMiddleware
+from cas.casmiddleware import CASMiddleware
 import time
 
 logger = logging.getLogger(__name__)
 
 class WerkzeugCAS(CASMiddleware):
+
+    @classmethod
+    def fromConfig(self, application, fs_session_store, ignored_callback = None, filename = None):
+
+        instance = self()
+        instance.loadSettings(filename, ignored_callback)
+        instance._application = application
+        instance._session_store = fs_session_store
+        instance._ignored_callback = ignored_callback
+
+        return (instance)
 
     def _is_session_expired(self):
 #        
@@ -49,8 +60,7 @@ class WerkzeugCAS(CASMiddleware):
                     response.headers[name] = resp['headers'][name]
             if 'data' in resp:
                 response['data'] = resp.data
-            if 'cookie_value' in resp:
-                response.set_cookie(self.CAS_COOKIE_NAME, value = resp['cookie_value'], max_age = None, expires = None)
+            response.set_cookie(self.CAS_COOKIE_NAME, value = self._session.sid, max_age = None, expires = None)
             return response(environ, start_response)
         else:
             return self._application(environ, start_response)

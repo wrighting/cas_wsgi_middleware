@@ -7,7 +7,7 @@ from pprint import pformat
 
 from ConfigParser import ConfigParser
 
-from cas import WerkzeugCAS
+from cas.werkzeugcas import WerkzeugCAS
 
 #This function is called if:
 # Not authenticated

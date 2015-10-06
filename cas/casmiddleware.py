@@ -37,8 +37,7 @@ class CASMiddleware(object):
     def __init__(self):
         logging.debug("Initializing middleware")
 
-    def initialize(self, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, session_store = None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None, application = None):
-        self._application = application
+    def initialize(self, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None, application = None):
         self._root_url = cas_root_url
         self._login_url = cas_root_url + '/login'
         self._logout_url = logout_url
@@ -48,7 +47,6 @@ class CASMiddleware(object):
         self._effective_url = effective_url
         self._protocol = protocol_version
         self._casfailed_url = casfailed_url
-        self._session_store = session_store
         self._session = None
         self._cookie_expires = False
         if ignore_redirect is not None:
@@ -76,11 +74,10 @@ class CASMiddleware(object):
         self.initialize(cas_root_url = config.get('CAS','CAS_SERVICE'), logout_url = config.get('CAS','CAS_LOGOUT_PAGE'), logout_dest = config.get('CAS','CAS_LOGOUT_DESTINATION'), protocol_version = config.getint('CAS','CAS_VERSION'), casfailed_url = config.get('CAS','CAS_FAILURE_PAGE'), entry_page = config.get('CAS','ENTRY_PAGE'), ignore_redirect = config.get('CAS','IGNORE_REDIRECT'), ignored_callback = ignored_callback, gateway_redirect = config.get('CAS','GATEWAY_REDIRECT'), cas_private_key = config.get('CAS', 'PRIVATE_KEY'))
 
     @classmethod
-    def fromConfig(self, application, fs_session_store = None, ignored_callback = None, filename = None):
+    def fromConfig(self, ignored_callback = None, filename = None):
 
         instance = self()
         instance.loadSettings(filename, ignored_callback)
-        instance._application = application
         instance._ignored_callback = ignored_callback
 
         return (instance)
@@ -136,9 +133,6 @@ class CASMiddleware(object):
     @abstractmethod
     def _is_session_expired(self):
 #        
-#          self._session_store.delete(self._session)
-#          self._get_session(request)
-#          return True
         return False
 
     @abstractmethod
@@ -170,7 +164,6 @@ class CASMiddleware(object):
           try:
             request_body = form['logoutRequest']
             logger.debug("POST:" + str(request_body))
-            logger.debug("POST:" + str(environ))
             return self._parse_logout_request(request_body)
           except (Exception):
             logger.warning("Exception parsing post")
@@ -255,7 +248,6 @@ class CASMiddleware(object):
                 service_url = request_url
                 response['status'] = '302 Moved Temporarily'
                 response['headers']['Location'] = '%s?service=%s%s' % (self._login_url, quote(service_url),is_gateway)
-                response['cookie_value'] = self._get_session_var('sid')
                 return response
 
     @abstractmethod
