@@ -8,12 +8,12 @@ setup(
     name="CASWSGIMiddleware",
 
     # Version number (initial):
-    version="1.0.0",
+    version="1.1.0",
 
     # Application author details:
     author="Ian Wright",
     author_email="tech@wrighting.org",
-    keywords="cas wsgi",
+    keywords="cas wsgi python",
     # Packages
     packages=["cas"],
 
