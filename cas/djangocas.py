@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.contrib.auth import logout
 from django.contrib import auth
 from django.core.exceptions import ImproperlyConfigured
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,9 @@ class DjangoCAS(CASMiddleware):
 
     def _remove_session_by_ticket(self, ticket_id):
         logger.debug("Nothing to do")
+
+    def loadSettings(self, filename = None, ignored_callback = None):
+        self.initialize(cas_root_url = settings.CAS_SERVICE, logout_url = settings.LOGOUT_URL, logout_dest = settings.CAS_LOGOUT_DESTINATION, protocol_version = settings.CAS_VERSION, casfailed_url = settings.CAS_FAILURE_PAGE, entry_page = settings.ENTRY_PAGE, ignore_redirect = settings.IGNORE_REDIRECT, ignored_callback = ignored_callback, gateway_redirect = settings.GATEWAY_REDIRECT, cas_private_key = settings.PRIVATE_KEY)
 
     def process_request(self, request):
 
