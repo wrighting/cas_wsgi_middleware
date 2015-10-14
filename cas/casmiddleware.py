@@ -307,13 +307,16 @@ class CASMiddleware(object):
     def _get_logout_redirect_url(self):
         response = { 'headers': {} }
         dest = self._logout_dest
-        if dest == '' and self._has_session_var(self.CAS_ORIGIN):
-          dest = self._get_session_var(self.CAS_ORIGIN)
-        logger.debug("Log out dest:" + dest)
-        parsed = urlparse(dest)
-        if parsed.path == self._logout_url:
-          dest = self._sso_logout_url
-        logger.debug("Log out redirecting to:" + dest)
+        if (dest == None or dest == '') and self._has_session_var(self.CAS_ORIGIN):
+            dest = self._get_session_var(self.CAS_ORIGIN)
+        logger.debug("Log out dest:" + str(dest))
+        if dest:
+            parsed = urlparse(dest)
+            if parsed.path == self._logout_url:
+                dest = self._sso_logout_url
+        else:
+            dest = ''
+        logger.debug("Log out redirecting to:" + str(dest))
         response['status'] = '302 Moved Temporarily'
         response['headers']['Location'] = '%s?service=%s' % (self._sso_logout_url, quote(dest))
         return response
