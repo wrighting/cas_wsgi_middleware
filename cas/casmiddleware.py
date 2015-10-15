@@ -1,20 +1,18 @@
 import logging
 from cgi import parse_qs
-from urllib import quote, urlencode, unquote_plus
-from urlparse import urlparse
+from urllib.parse import quote, urlencode, unquote_plus
+from urllib.parse import urlparse
 import requests
 import xml.dom.minidom
 import re
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import rsa
 from abc import ABCMeta, abstractmethod
 
 logger = logging.getLogger(__name__)
 
 
-class CASMiddleware(object):
-
-    __metaclass__ = ABCMeta
+class CASMiddleware(object, metaclass=ABCMeta):
 
     casNamespaceUri = 'http://www.yale.edu/tp/cas'
     samlpNamespaceUri = 'urn:oasis:names:tc:SAML:2.0:protocol'
@@ -190,7 +188,7 @@ class CASMiddleware(object):
             return response
         else:
             logger.debug('Session not authenticated' + str(self._session))
-            if params.has_key('ticket'):
+            if 'ticket' in params:
                 # Have ticket, validate with CAS server
                 ticket = params['ticket']
 
