@@ -8,7 +8,7 @@ setup(
     name="CASWSGIMiddleware",
 
     # Version number (initial):
-    version="1.1.0",
+    version="1.2.0",
 
     # Application author details:
     author="Ian Wright",
@@ -34,6 +34,6 @@ setup(
 
     classifiers=[
         'Development Status :: 5 - Production/Stable',
-        'Programming Language :: Python :: 2'
+        'Programming Language :: Python :: 3'
     ]
 )
