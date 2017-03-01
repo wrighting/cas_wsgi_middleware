@@ -50,7 +50,7 @@ class WerkzeugCAS(CASMiddleware):
             if 'set_values' in resp:
                 self._set_values(environ)
                 return self._application(environ, start_response)
-            if 'ignore_callback' in resp and response['ignore_callback'] == True:
+            if 'ignore_callback' in resp and resp['ignore_callback'] == True:
                   return self._ignored_callback(environ, start_response)
 
             if 'status' in resp:
@@ -59,7 +59,7 @@ class WerkzeugCAS(CASMiddleware):
                 if name in resp['headers']:
                     response.headers[name] = resp['headers'][name]
             if 'data' in resp:
-                response['data'] = resp.data
+                response.data = resp['data']
             response.set_cookie(self.CAS_COOKIE_NAME, value = self._session.sid, max_age = None, expires = None)
             return response(environ, start_response)
         else:
