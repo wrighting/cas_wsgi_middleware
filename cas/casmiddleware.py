@@ -35,7 +35,7 @@ class CASMiddleware(object, metaclass=ABCMeta):
     def __init__(self):
         logging.debug("Initializing middleware")
 
-    def initialize(self, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None, application = None):
+    def initialize(self, cas_root_url, entry_page = '/', effective_url = None, logout_url = '/logout', logout_dest = '', protocol_version = 2, casfailed_url=None, ignore_redirect = None, ignored_callback = None, gateway_redirect = None, group_separator = ';', group_environ = 'HTTP_CAS_MEMBEROF', cas_private_key = None, ssl_service = False, application = None):
         self._root_url = cas_root_url
         self._login_url = cas_root_url + '/login'
         self._logout_url = logout_url
@@ -59,6 +59,7 @@ class CASMiddleware(object, metaclass=ABCMeta):
         self._group_separator = group_separator
         self._group_environ = group_environ
         keydata = None
+        self._ssl_service = ssl_service
         if cas_private_key and cas_private_key != '':
             with open(cas_private_key) as privatefile:
                 keydata = privatefile.read()
@@ -195,6 +196,9 @@ class CASMiddleware(object, metaclass=ABCMeta):
                 service_url = self._effective_url or request_url
 
                 service_url = re.sub(r".ticket=" + ticket, "", service_url)
+                if self._ssl_service:
+                    service_url = re.sub(r"^http:", "https:", service_url)
+
                 logger.debug('Service URL' + service_url)
 
                 username = self._validate(service_url, ticket)
