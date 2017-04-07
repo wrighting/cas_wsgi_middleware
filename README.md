@@ -99,3 +99,7 @@ Default = 'HTTP_CAS_MEMBEROF', The name of the environment variable containing t
 ###cas_private_key (CAS 4.1)
 
 Default = None, The name of a file containing the private key used for decrypting the credentials attribute when using clearpass. This will be available in the PASSWORD environment variable. The value is held in the session using encryption keys held only in memory.
+
+###ssl_service
+
+Default = False, Ensures https when validating the ticket
