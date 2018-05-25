@@ -189,7 +189,7 @@ class CASMiddleware(object, metaclass=ABCMeta):
             return response
         else:
             logger.debug('Session not authenticated' + str(self._session))
-            if 'ticket' in params:
+            if params and 'ticket' in params:
                 # Have ticket, validate with CAS server
                 ticket = params['ticket']
 

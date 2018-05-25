@@ -12,6 +12,22 @@ logger = logging.getLogger(__name__)
 
 class DjangoCAS(CASMiddleware):
 
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # One-time configuration and initialization.
+
+    def __call__(self, request):
+        # Code to be executed for each request before
+        # the view (and later middleware) are called.
+
+        response = self.process_request(request)
+
+        # Code to be executed for each request/response after
+        # the view is called.
+
+        return response
+
+
     def _is_session_expired(self):
 #        
 #          self._session_store.delete(self._session)
@@ -51,24 +67,25 @@ class DjangoCAS(CASMiddleware):
             params = request.GET
         resp = self._process_request(request_method, request_url, path, params, form)
         logging.debug(str(resp))
+        response = self.get_response(request)
         if resp:
             if 'set_values' in resp:
                 self._set_values(request)
-                return None
+                return response
             if 'ignore_callback' in resp and response['ignore_callback'] == True:
                   return self._ignored_callback(environ, start_response)
 
-            response = HttpResponse(status = int(resp['status'][0:3]), reason = resp['status'][4:])
-            for name in ['Location', 'Content-Type', 'WWW-Authenticate']:
-                if name in resp['headers']:
-                    response[name] = resp['headers'][name]
-            if 'data' in resp:
-                response.write(resp.data)
-            if 'logout' in resp:
-                logout(request)
-            return response
-        else:
-            return None
+            if resp['status'] != '':
+                response = HttpResponse(status = int(resp['status'][0:3]), reason = resp['status'][4:])
+                for name in ['Location', 'Content-Type', 'WWW-Authenticate']:
+                    if name in resp['headers']:
+                        response[name] = resp['headers'][name]
+                if 'data' in resp:
+                    response.write(resp['data'])
+                if 'logout' in resp:
+                    logout(request)
+
+        return response
 
     def _get_session(self, request):
         self._session = request.session
